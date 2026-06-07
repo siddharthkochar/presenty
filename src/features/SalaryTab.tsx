@@ -72,6 +72,11 @@ export default function SalaryTab() {
     const lastDay = new Date(year, month, 0).getDate()
     const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
+    // For the current month, only count days that have already passed so
+    // "Days Absent" does not include future dates.
+    const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1
+    const daysElapsed = isCurrentMonth ? now.getDate() : undefined
+
     const { data: attData, error: attErr } = await supabase
       .from('attendance')
       .select('*')
@@ -132,7 +137,8 @@ export default function SalaryTab() {
       month,
       att.length,
       lateCount,
-      carried
+      carried,
+      daysElapsed
     )
     setResult({ person, breakdown, attendance: att, year, month })
     setLoading(false)
