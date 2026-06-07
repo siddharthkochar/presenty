@@ -249,8 +249,9 @@ export default function SalaryTab() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Stat grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 {stat(result.breakdown.present, 'Days Present')}
+                {stat(result.breakdown.lateCount, 'Late Check-ins', 'text-amber-600')}
                 {stat(result.breakdown.absent, 'Days Absent')}
                 {stat(result.breakdown.paidLeave, 'Paid Leave', 'text-green-600')}
                 {stat(result.breakdown.unpaidLeave, 'Unpaid Leave', 'text-destructive')}
