@@ -8,6 +8,8 @@ export interface SalaryBreakdown {
   deduction: number        // unpaidLeave * perDay
   finalPay: number         // salary_per_month - deduction
   lateCount: number        // informational, not deducted
+  carriedIn: number       // leave days carried in from previous month
+  effectiveLeave: number  // monthlyLeaveBalance + carriedIn
 }
 
 // daysInMonth: actual calendar days (28-31)
@@ -21,15 +23,19 @@ export function calculateSalary(
   year: number,
   month: number,  // 1-12
   presentCount: number,
-  lateCount: number
+  lateCount: number,
+  carriedIn: number = 0
 ): SalaryBreakdown {
   const workingDays = daysInMonth(year, month)
   const perDay = salaryPerMonth / workingDays
   const present = presentCount
   const absent = Math.max(0, workingDays - present)
-  const paidLeave = Math.min(absent, monthlyLeaveBalance)
+  const effectiveLeave = monthlyLeaveBalance + carriedIn
+  const paidLeave = Math.min(absent, effectiveLeave)
   const unpaidLeave = Math.max(0, absent - paidLeave)
   const deduction = unpaidLeave * perDay
   const finalPay = salaryPerMonth - deduction
-  return { workingDays, perDay, present, absent, paidLeave, unpaidLeave, deduction, finalPay, lateCount }
+  return { workingDays, perDay, present, absent, paidLeave, unpaidLeave, deduction, finalPay, lateCount, carriedIn, effectiveLeave }
 }
+
+

@@ -27,6 +27,7 @@ import { loadFaceApiModels, getDescriptorFromElement } from '@/lib/face'
 interface PersonForm {
   name: string
   work_in_time: string
+  work_in_end: string
   salary_per_month: string
   monthly_leave_balance: string
 }
@@ -34,6 +35,7 @@ interface PersonForm {
 const EMPTY_FORM: PersonForm = {
   name: '',
   work_in_time: '09:00',
+  work_in_end: '09:30',
   salary_per_month: '',
   monthly_leave_balance: '2',
 }
@@ -135,6 +137,7 @@ export default function PeopleTab() {
     setForm({
       name: person.name,
       work_in_time: person.work_in_time.substring(0, 5),
+      work_in_end: person.work_in_end.substring(0, 5),
       salary_per_month: String(person.salary_per_month),
       monthly_leave_balance: String(person.monthly_leave_balance),
     })
@@ -157,8 +160,8 @@ export default function PeopleTab() {
       setFormError('Enter a valid salary amount')
       return
     }
-    if (!editingId && !photoFile) {
-      setFormError('A photo is required when adding a new person')
+    if (!form.work_in_end || form.work_in_end < form.work_in_time) {
+      setFormError('Work-in end time must be after or equal to start time')
       return
     }
 
@@ -205,6 +208,7 @@ export default function PeopleTab() {
       const payload = {
         name: form.name.trim(),
         work_in_time: form.work_in_time + ':00',
+        work_in_end: form.work_in_end + ':00',
         salary_per_month: salary,
         monthly_leave_balance: Math.max(0, Number(form.monthly_leave_balance) || 2),
         ...(photoUrl !== undefined ? { photo_url: photoUrl } : {}),
@@ -299,7 +303,7 @@ export default function PeopleTab() {
               {people.map(p => (
                 <TableRow key={p.id}>
                   <TableCell className="font-medium">{p.name}</TableCell>
-                  <TableCell>{p.work_in_time.substring(0, 5)}</TableCell>
+                  <TableCell>{p.work_in_time.substring(0, 5)}–{p.work_in_end.substring(0, 5)}</TableCell>
                   <TableCell>₹{Number(p.salary_per_month).toLocaleString('en-IN')}</TableCell>
                   <TableCell>{p.monthly_leave_balance} days</TableCell>
                   <TableCell>
@@ -369,13 +373,24 @@ export default function PeopleTab() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="work_in_time">Work-in Time</Label>
-              <Input
-                id="work_in_time"
-                type="time"
-                value={form.work_in_time}
-                onChange={e => setForm(f => ({ ...f, work_in_time: e.target.value }))}
-              />
+              <Label>Work-in Time</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="work_in_time"
+                  type="time"
+                  value={form.work_in_time}
+                  onChange={e => setForm(f => ({ ...f, work_in_time: e.target.value }))}
+                  className="w-fit"
+                />
+                <span className="text-sm text-muted-foreground">to</span>
+                <Input
+                  id="work_in_end"
+                  type="time"
+                  value={form.work_in_end}
+                  onChange={e => setForm(f => ({ ...f, work_in_end: e.target.value }))}
+                  className="w-fit"
+                />
+              </div>
             </div>
 
             <div className="space-y-1.5">
@@ -407,7 +422,7 @@ export default function PeopleTab() {
               <Label>
                 Photo{' '}
                 <span className="text-muted-foreground font-normal">
-                  {editingId ? '(optional — leave empty to keep existing)' : '(required)'}
+                  {'(optional)'}
                 </span>
               </Label>
               <div className="mt-1.5 space-y-2">

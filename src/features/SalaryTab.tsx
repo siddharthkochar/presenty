@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { supabase } from '@/lib/supabase'
-import type { Person, Attendance } from '@/lib/supabase'
+import type { Person, Attendance, LeaveCarryforward } from '@/lib/supabase'
 import { calculateSalary, type SalaryBreakdown } from '@/lib/salary'
 
 const MONTH_NAMES = [
@@ -44,6 +44,9 @@ export default function SalaryTab() {
     month: number
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [carriedIn, setCarriedIn] = useState<number>(0)
+  const [prevUnused, setPrevUnused] = useState<number>(0)
+  const [carryLoading, setCarryLoading] = useState(false)
 
   async function ensurePeople() {
     if (peopleLoaded) return
@@ -57,6 +60,8 @@ export default function SalaryTab() {
     setLoading(true)
     setError(null)
     setResult(null)
+    setCarriedIn(0)
+    setPrevUnused(0)
 
     const person = people.find(p => p.id === selectedPersonId)
     if (!person) { setLoading(false); return }
@@ -80,6 +85,42 @@ export default function SalaryTab() {
       return
     }
 
+    // Carry-forward for selected month
+    const ym = toYearMonth(year, month)
+    const { data: cfData } = await supabase
+      .from('leave_carryforward')
+      .select('*')
+      .eq('person_id', selectedPersonId)
+      .eq('year_month', ym)
+      .maybeSingle()
+    const carried = (cfData as LeaveCarryforward | null)?.carried_days ?? 0
+    setCarriedIn(carried)
+
+    // Previous month unused leave
+    const prev = prevYearMonth(year, month)
+    const prevStart = `${prev.year}-${String(prev.month).padStart(2, '0')}-01`
+    const prevEnd = new Date(prev.year, prev.month, 0).toISOString().split('T')[0]
+    const { data: prevAttData } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('person_id', selectedPersonId)
+      .gte('attend_date', prevStart)
+      .lte('attend_date', prevEnd)
+    const { data: prevCfData } = await supabase
+      .from('leave_carryforward')
+      .select('*')
+      .eq('person_id', selectedPersonId)
+      .eq('year_month', toYearMonth(prev.year, prev.month))
+      .maybeSingle()
+    const prevCarried = (prevCfData as LeaveCarryforward | null)?.carried_days ?? 0
+    const prevDaysInMonth = new Date(prev.year, prev.month, 0).getDate()
+    const prevPresent = (prevAttData || []).length
+    const prevAbsent = Math.max(0, prevDaysInMonth - prevPresent)
+    const prevEffective = person.monthly_leave_balance + prevCarried
+    const prevPaidLeave = Math.min(prevAbsent, prevEffective)
+    const unused = Math.max(0, prevEffective - prevPaidLeave)
+    setPrevUnused(unused)
+
     const att = (attData || []) as Attendance[]
     const lateCount = att.filter(a => a.is_late).length
     const breakdown = calculateSalary(
@@ -88,10 +129,43 @@ export default function SalaryTab() {
       year,
       month,
       att.length,
-      lateCount
+      lateCount,
+      carried
     )
     setResult({ person, breakdown, attendance: att, year, month })
     setLoading(false)
+  }
+
+  async function handleCarryForward() {
+    if (!result) return
+    setCarryLoading(true)
+    const ym = toYearMonth(result.year, result.month)
+    await supabase
+      .from('leave_carryforward')
+      .upsert({ person_id: result.person.id, year_month: ym, carried_days: prevUnused }, { onConflict: 'person_id,year_month' })
+    setCarryLoading(false)
+    await handleCalculate()
+  }
+
+  async function handleRemoveCarryForward() {
+    if (!result) return
+    setCarryLoading(true)
+    const ym = toYearMonth(result.year, result.month)
+    await supabase
+      .from('leave_carryforward')
+      .delete()
+      .eq('person_id', result.person.id)
+      .eq('year_month', ym)
+    setCarryLoading(false)
+    await handleCalculate()
+  }
+
+  function prevYearMonth(year: number, month: number): { year: number; month: number } {
+    return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
+  }
+
+  function toYearMonth(year: number, month: number): string {
+    return `${year}-${String(month).padStart(2, '0')}`
   }
 
   const currentYear = now.getFullYear()
@@ -193,9 +267,21 @@ export default function SalaryTab() {
                   <span>₹{result.breakdown.perDay.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Monthly leave balance (lapses monthly)</span>
+                  <span>Monthly leave allowance</span>
                   <span>{result.person.monthly_leave_balance} days</span>
                 </div>
+                {result.breakdown.carriedIn > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Carried forward from previous month</span>
+                    <span>+{result.breakdown.carriedIn} days</span>
+                  </div>
+                )}
+                {result.breakdown.carriedIn > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Effective leave balance</span>
+                    <span>{result.breakdown.effectiveLeave} days</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>Gross salary</span>
                   <span>₹{Number(result.person.salary_per_month).toLocaleString('en-IN')}</span>
@@ -226,6 +312,28 @@ export default function SalaryTab() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Carry-forward controls */}
+          <div className="border rounded-lg p-3 space-y-2 text-sm">
+            <p className="font-medium">Leave Carry-forward</p>
+            {carriedIn > 0 ? (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">{carriedIn} day{carriedIn !== 1 ? 's' : ''} carried in from previous month</span>
+                <Button size="sm" variant="outline" disabled={carryLoading} onClick={handleRemoveCarryForward}>
+                  Remove
+                </Button>
+              </div>
+            ) : prevUnused > 0 ? (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">{prevUnused} unused day{prevUnused !== 1 ? 's' : ''} from previous month</span>
+                <Button size="sm" disabled={carryLoading} onClick={handleCarryForward}>
+                  {carryLoading ? 'Saving…' : `Carry forward ${prevUnused} day${prevUnused !== 1 ? 's' : ''}`}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-muted-foreground">No unused leave from previous month.</p>
+            )}
+          </div>
 
           {/* Attendance log */}
           {result.attendance.length > 0 ? (

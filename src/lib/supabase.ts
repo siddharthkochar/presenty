@@ -12,6 +12,7 @@ export interface Person {
   photo_url: string | null
   face_descriptor: number[] | null  // 128-d array stored as float8[] in Postgres
   work_in_time: string  // "HH:MM:SS" format
+  work_in_end: string    // "HH:MM:SS" format
   salary_per_month: number
   monthly_leave_balance: number
   active: boolean
@@ -34,4 +35,12 @@ export interface Settings {
   capture_interval_sec: number
   match_threshold: number
   manual_entry: boolean
+}
+
+export interface LeaveCarryforward {
+  id: string
+  person_id: string
+  year_month: string  // "YYYY-MM"
+  carried_days: number
+  created_at: string
 }

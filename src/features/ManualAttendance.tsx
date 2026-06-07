@@ -16,6 +16,12 @@ interface MarkedInfo {
 export default function ManualAttendance() {
   const today = new Date().toISOString().split('T')[0]
 
+  const nowHHMM = () => {
+    const d = new Date()
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  }
+  const [checkInTime, setCheckInTime] = useState(nowHHMM)
+
   const [selectedDate, setSelectedDate] = useState(today)
   const [people, setPeople] = useState<Person[]>([])
   const [markedMap, setMarkedMap] = useState<Record<string, MarkedInfo>>({})
@@ -54,19 +60,21 @@ export default function ManualAttendance() {
     await fetchAttendance(date)
   }
 
-  const mark = async (person: Person, isLate: boolean) => {
+  const mark = async (person: Person, forceIsLate?: boolean) => {
     setMarking(person.id)
-    const now = new Date()
+    const checkInAt = new Date(`${selectedDate}T${checkInTime}:00`)
+    const timeStr = `${checkInTime}:00`
+    const isLate = forceIsLate ?? (timeStr > person.work_in_end)
     const { error } = await supabase.from('attendance').insert({
       person_id: person.id,
       attend_date: selectedDate,
-      check_in_at: now.toISOString(),
+      check_in_at: checkInAt.toISOString(),
       is_late: isLate,
     })
     if (!error) {
       setMarkedMap(prev => ({
         ...prev,
-        [person.id]: { is_late: isLate, check_in_at: now.toISOString() },
+        [person.id]: { is_late: isLate, check_in_at: checkInAt.toISOString() },
       }))
     }
     setMarking(null)
@@ -89,7 +97,7 @@ export default function ManualAttendance() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Label htmlFor="attend-date" className="text-sm shrink-0">
               Date
             </Label>
@@ -99,6 +107,16 @@ export default function ManualAttendance() {
               value={selectedDate}
               max={today}
               onChange={e => handleDateChange(e.target.value)}
+              className="w-fit"
+            />
+            <Label htmlFor="check-in-time" className="text-sm shrink-0">
+              Check-in
+            </Label>
+            <Input
+              id="check-in-time"
+              type="time"
+              value={checkInTime}
+              onChange={e => setCheckInTime(e.target.value)}
               className="w-fit"
             />
           </div>
@@ -149,7 +167,7 @@ export default function ManualAttendance() {
                           size="sm"
                           variant="default"
                           disabled={isBusy}
-                          onClick={() => mark(person, false)}
+                          onClick={() => mark(person)}
                         >
                           Present
                         </Button>

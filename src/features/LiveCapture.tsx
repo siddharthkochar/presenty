@@ -152,7 +152,7 @@ export default function LiveCapture() {
             const person = people.find(p => p.id === match.personId)!
             const now = new Date()
             const nowTime = now.toTimeString().substring(0, 8)
-            const isLate = nowTime > person.work_in_time
+            const isLate = nowTime > person.work_in_end
 
             const { error: insErr } = await supabase.from('attendance').insert({
               person_id: person.id,
