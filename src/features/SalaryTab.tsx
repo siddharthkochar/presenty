@@ -69,7 +69,8 @@ export default function SalaryTab() {
     const year = Number(selectedYear)
     const month = Number(selectedMonth)
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-    const endDate = new Date(year, month, 0).toISOString().split('T')[0]
+    const lastDay = new Date(year, month, 0).getDate()
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
     const { data: attData, error: attErr } = await supabase
       .from('attendance')
@@ -99,7 +100,8 @@ export default function SalaryTab() {
     // Previous month unused leave
     const prev = prevYearMonth(year, month)
     const prevStart = `${prev.year}-${String(prev.month).padStart(2, '0')}-01`
-    const prevEnd = new Date(prev.year, prev.month, 0).toISOString().split('T')[0]
+    const prevLastDay = new Date(prev.year, prev.month, 0).getDate()
+    const prevEnd = `${prev.year}-${String(prev.month).padStart(2, '0')}-${String(prevLastDay).padStart(2, '0')}`
     const { data: prevAttData } = await supabase
       .from('attendance')
       .select('*')
